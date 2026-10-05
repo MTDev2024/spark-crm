@@ -1,5 +1,21 @@
 # Connaissances commerciales
 
+## Où ça se trouve dans l'application
+
+Menu **Bibliothèque** : Méthodes, Offres, Réalisations, Arguments, Objections, Sources, Règles. Chaque section permet d'ajouter, modifier et supprimer des éléments. L'application ne contient **aucun contenu préchargé** : tout est saisi par l'utilisateur à partir de ses propres sources.
+
+Les champs de chaque type sont décrits dans `src/config/library.ts` ; la base est définie dans `supabase/migrations/20261006000000_commercial_library.sql`.
+
+## Règles de validation implémentées
+
+- Une méthode **validée** doit avoir une source (vérifié dans le formulaire **et** par une contrainte SQL).
+- Une source utilisée par une méthode ne peut pas être supprimée.
+- Une méthode dont la source n'est pas « Validée pour utilisation » affiche un avertissement.
+- Les listes (règles, contextes, questions…) se saisissent une valeur par ligne.
+- Un champ laissé vide reste vide (inconnu) : rien n'est complété automatiquement.
+
+Pas encore implémenté : liens entre méthodes liées (`relatedMethods`), versionnage détaillé des méthodes (un numéro de version texte est enregistré), utilisation par l'IA (phases suivantes).
+
 ## Méthodes
 
 Chaque méthode (SPIN, SONCAS(E), AIDA, CAB, BANT, Challenger Sale, objections, closing, setting, relance, négociation) est une connaissance structurée : nom, description, objectif, source, auteur, version, contextes applicables ou non, étapes, règles, exemples, limites, méthodes liées, statut.

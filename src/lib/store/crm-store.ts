@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "react";
 import { toDateString } from "@/lib/domain/actions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type {
@@ -12,8 +11,8 @@ import {
   actionToRow,
   dataPointFromRow,
   dataPointToRow,
-  interactionFromRow,
   interactionToRow,
+  interactionFromRow,
   prospectFieldsToRow,
   prospectFromRow,
   prospectToRow,
@@ -22,26 +21,16 @@ import {
   type InteractionRow,
   type ProspectRow,
 } from "./mappers";
+import { createRemoteStore } from "./remote-store";
 
 /**
- * STORE DES DONNÉES (Supabase)
+ * STORE DES DONNÉES PROSPECTS (Supabase)
  *
- * Ce fichier est la SEULE porte d'entrée vers les données : les composants
- * lisent via `useCrm()` et écrivent via les fonctions exportées ci-dessous.
- *
- * Fonctionnement :
- *  - Au premier abonnement, tout est chargé depuis Supabase en mémoire.
- *  - Chaque modification met d'abord à jour la mémoire (l'écran réagit
- *    instantanément), puis envoie l'écriture à Supabase en arrière-plan.
- *  - Les écritures partent l'une après l'autre (file d'attente), pour qu'un
- *    prospect soit toujours créé avant ses actions.
- *  - Si une écriture échoue, une erreur est exposée (`error`) et les données
- *    sont rechargées depuis la base : l'écran retrouve l'état réel.
- *  - La sécurité (chaque utilisateur ne voit que ses lignes) est assurée par
- *    la base (RLS), pas par ce code.
- *
- * `useSyncExternalStore` (hook React) abonne les composants au store : à chaque
- * modification on remplace l'objet `cached`, ce qui déclenche leur mise à jour.
+ * Porte d'entrée unique vers les prospects, actions, interactions et données :
+ * les composants lisent via `useCrm()` et écrivent via les fonctions exportées
+ * ci-dessous. La mécanique (chargement, file d'écriture, erreurs) est dans
+ * remote-store.ts. La sécurité (chaque utilisateur ne voit que ses lignes) est
+ * assurée par la base (RLS), pas par ce code.
  */
 
 export type CrmState = {
@@ -51,14 +40,6 @@ export type CrmState = {
   dataPoints: StoredDataPoint[];
 };
 
-type Snapshot = {
-  state: CrmState;
-  /** false tant que les données n'ont pas été chargées depuis la base. */
-  hydrated: boolean;
-  /** Message d'erreur de synchronisation à afficher, ou null. */
-  error: string | null;
-};
-
 const EMPTY_STATE: CrmState = {
   prospects: [],
   actions: [],
@@ -66,51 +47,13 @@ const EMPTY_STATE: CrmState = {
   dataPoints: [],
 };
 
-const INITIAL_SNAPSHOT: Snapshot = {
-  state: EMPTY_STATE,
-  hydrated: false,
-  error: null,
-};
+const db = () => getSupabaseBrowserClient();
 
-let cached: Snapshot = INITIAL_SNAPSHOT;
-let loadStarted = false;
-const listeners = new Set<() => void>();
-
-function publish(next: Snapshot): void {
-  cached = next;
-  listeners.forEach((listener) => listener());
-}
-
-function getSnapshot(): Snapshot {
-  return cached;
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  // Premier abonné côté navigateur : on lance le chargement des données.
-  if (!loadStarted) {
-    loadStarted = true;
-    void load();
-  }
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-/** Hook de lecture : { state, hydrated, error }. */
-export function useCrm(): Snapshot {
-  return useSyncExternalStore(subscribe, getSnapshot, () => INITIAL_SNAPSHOT);
-}
-
-/** Message affiché à l'utilisateur quand la base est injoignable ou refuse l'écriture. */
-function describeError(error: { message: string } | null | undefined): string {
-  return `Erreur de synchronisation avec la base : ${error?.message ?? "inconnue"}`;
-}
-
-/** Charge les quatre tables en parallèle et remplace l'état en mémoire. */
-async function load(): Promise<void> {
-  try {
-    const supabase = getSupabaseBrowserClient();
+const store = createRemoteStore<CrmState>({
+  empty: EMPTY_STATE,
+  /** Charge les quatre tables en parallèle. */
+  async load() {
+    const supabase = db();
     const [prospects, actions, interactions, dataPoints] = await Promise.all([
       supabase.from("prospects").select("*").order("created_at", { ascending: false }),
       supabase.from("actions").select("*"),
@@ -118,12 +61,8 @@ async function load(): Promise<void> {
       supabase.from("data_points").select("*"),
     ]);
     const failure = [prospects, actions, interactions, dataPoints].find((r) => r.error);
-    if (failure) {
-      publish({ ...cached, hydrated: true, error: describeError(failure.error) });
-      return;
-    }
-    publish({
-      hydrated: true,
+    if (failure) return { state: EMPTY_STATE, error: failure.error };
+    return {
       error: null,
       state: {
         prospects: (prospects.data as ProspectRow[]).map(prospectFromRow),
@@ -131,46 +70,17 @@ async function load(): Promise<void> {
         interactions: (interactions.data as InteractionRow[]).map(interactionFromRow),
         dataPoints: (dataPoints.data as DataPointRow[]).map(dataPointFromRow),
       },
-    });
-  } catch (error) {
-    publish({ ...cached, hydrated: true, error: describeError(error as Error) });
-  }
-}
+    };
+  },
+});
 
-/* ------------------------- écriture en arrière-plan ------------------------ */
-
-// File d'attente : chaque écriture attend la fin de la précédente.
-let writeQueue: Promise<void> = Promise.resolve();
-
-/**
- * Met une écriture en file. `write` renvoie l'erreur éventuelle de Supabase.
- * En cas d'échec : on affiche l'erreur puis on recharge l'état réel de la base.
- */
-function enqueue(
-  write: () => PromiseLike<{ error: { message: string } | null }>,
-): void {
-  writeQueue = writeQueue.then(async () => {
-    try {
-      const { error } = await write();
-      if (error) throw new Error(error.message);
-    } catch (error) {
-      publish({ ...cached, error: describeError(error as Error) });
-      await load();
-      // load() efface l'erreur si le rechargement réussit : on la remet pour qu'elle reste visible.
-      publish({ ...cached, error: describeError(error as Error) });
-    }
-  });
-}
+/** Hook de lecture : { state, hydrated, error }. */
+export const useCrm = store.useStore;
 
 /** Masque le message d'erreur (bouton « Fermer »). */
-export function dismissError(): void {
-  publish({ ...cached, error: null });
-}
+export const dismissError = store.dismissError;
 
-/** Remplace l'état en mémoire (affichage immédiat avant l'écriture en base). */
-function setState(update: (state: CrmState) => CrmState): void {
-  publish({ ...cached, state: update(cached.state) });
-}
+const { setState, enqueue } = store;
 
 function newId(): string {
   return crypto.randomUUID();
@@ -180,8 +90,6 @@ function newId(): string {
 function today(): string {
   return toDateString(new Date());
 }
-
-const db = () => getSupabaseBrowserClient();
 
 /* ------------------------------ Prospects ------------------------------ */
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
-import { librarySections } from "@/config/navigation";
+import { libraryEntities } from "@/config/library";
 
 export default function LibraryPage() {
   return (
@@ -11,12 +11,12 @@ export default function LibraryPage() {
         description="La base commerciale utilisée pour préparer chaque action."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {librarySections.map((section) => (
-          <Link key={section.slug} href={`/bibliotheque/${section.slug}`}>
+        {libraryEntities.map((entity) => (
+          <Link key={entity.slug} href={`/bibliotheque/${entity.slug}`}>
             <Card className="h-full transition-colors hover:bg-muted/50">
               <CardHeader>
-                <CardTitle>{section.label}</CardTitle>
-                <CardDescription>{section.description}</CardDescription>
+                <CardTitle>{entity.label}</CardTitle>
+                <CardDescription>{entity.description}</CardDescription>
               </CardHeader>
             </Card>
           </Link>

@@ -27,7 +27,9 @@ npm run typecheck && npm run lint && npm test && npm run build   # vérification
 | Le schéma de la base et les règles de sécurité | `supabase/migrations/` |
 | Les libellés français affichés | `src/config/labels.ts` |
 | Les entrées du menu | `src/config/navigation.ts` |
-| Où sont lues et écrites les données | `src/lib/store/crm-store.ts` |
+| Où sont lues et écrites les données prospects | `src/lib/store/crm-store.ts` |
+| Où sont lues et écrites les données de la bibliothèque | `src/lib/store/library-store.ts` |
+| Les champs des méthodes, offres, sources… | `src/config/library.ts` |
 | Conversion base ↔ application | `src/lib/store/mappers.ts` |
 | Connexion à Supabase, protection des pages | `src/lib/supabase/`, `src/proxy.ts` |
 | Les règles métier (échéances, tri, exploitabilité) | `src/lib/domain/` |
@@ -73,6 +75,13 @@ Formulaire (composant client)
 ## Modifier la base
 
 Ne pas modifier une migration déjà appliquée. Créer un nouveau fichier `supabase/migrations/AAAAMMJJHHMMSS_description.sql`, l'exécuter dans SQL Editor, et adapter `types/domain.ts`, `store/mappers.ts` et le store.
+
+## Ajouter un champ à un élément de la bibliothèque
+
+1. Nouvelle migration SQL (`alter table … add column …`).
+2. Ajouter le champ dans la description du type, dans `src/config/library.ts`. Le formulaire, la validation et l'affichage suivent automatiquement.
+
+Pour un nouveau type d'élément : nouvelle table (avec RLS et `grant`), ajouter son nom dans `LibraryTable` (`types/library.ts`) et dans `libraryTables` (`library-store.ts`), puis une entrée dans `config/library.ts`.
 
 ## Ajouter un champ à un prospect (exemple)
 

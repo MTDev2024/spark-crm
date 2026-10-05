@@ -96,35 +96,5 @@ export type Interaction = {
   noNextAction: boolean;
 };
 
-export type SourceStatus =
-  | "raw"
-  | "analyzed"
-  | "principles_extracted"
-  | "validated"
-  | "validated_for_use"
-  | "to_review"
-  | "rejected";
-
-export type MethodStatus = "draft" | "validated" | "archived";
-
-export type SalesMethodStep = {
-  order: number;
-  name: string;
-  objective: string;
-  instructions: string;
-  questionPatterns: string[];
-  signals: string[];
-};
-
-export type SalesMethod = {
-  id: string;
-  name: string;
-  description: string;
-  objective: string;
-  /** Obligatoire : une méthode sans source n'est jamais opérationnelle. */
-  sourceId: string | null;
-  author: string | null;
-  version: string;
-  status: MethodStatus;
-  steps: SalesMethodStep[];
-};
+// Les types de la base commerciale (sources, méthodes, offres…) sont dans
+// src/types/library.ts.

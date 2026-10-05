@@ -24,11 +24,12 @@ src/
     dashboard/         blocs du dashboard (live-blocks = données réelles)
     prospects/         liste, formulaire, fiche et ses panneaux
     actions/           ligne d'action réutilisable, page Actions
+    library/           formulaire généré, carte, fiche résumée, étapes, section
     shared/            en-tête de page, champs de formulaire, état vide…
   config/              navigation, libellés français
   lib/
     domain/            règles métier pures : exploitabilité par canal, échéances et tri des actions
-    store/             crm-store (données + hook useCrm), mappers base ↔ application
+    store/             remote-store (mécanique commune), crm-store (prospects), library-store (bibliothèque), mappers et conversion de noms base ↔ application
     supabase/          clients navigateur et session, lecture des variables d'environnement
     validation/        schémas Zod : formulaires et qualification
   types/domain.ts      types fondamentaux
@@ -48,6 +49,9 @@ Les dossiers `lib/supabase`, `lib/ai`, `lib/research`… seront créés quand il
 | Bibliothèque en une route dynamique `[section]` | six sections au rendu identique pour l'instant |
 | Vitest | léger, sans configuration lourde, tests de la logique métier |
 | Pas de données fictives | tout bloc vide affiche un état vide explicite |
+| Bibliothèque pilotée par une description (`config/library.ts`) | sept types d'éléments au fonctionnement identique : le formulaire, la validation Zod, la liste et la fiche sont générés depuis la même description, au lieu d'écrire sept fois le même code |
+| Mécanique de store partagée (`remote-store.ts`) | chargement, file d'écriture et gestion d'erreur écrits une seule fois, utilisés par les prospects et la bibliothèque |
+| Source obligatoire pour valider une méthode | contrainte SQL + validation de formulaire : le contenu d'une méthode vient d'une source identifiable |
 | Données dans Supabase (phase 3) | persistance, accès multi-appareils, isolation par RLS ; tout passe par `lib/store/crm-store.ts`, les écrans n'appellent jamais la base directement |
 | Mise à jour optimiste + file d'écriture | l'interface reste instantanée ; les écritures partent dans l'ordre (un prospect avant ses actions) ; en cas d'échec, bandeau d'erreur et rechargement depuis la base |
 | UUID générés côté navigateur | permet de naviguer vers une fiche aussitôt créée, sans attendre la base |
@@ -65,4 +69,4 @@ Les dossiers `lib/supabase`, `lib/ai`, `lib/research`… seront créés quand il
 
 ## Prochaines couches
 
-Tables de la base commerciale (méthodes, sources, offres…), puis `lib/ai` (client OpenAI serveur, contexte dynamique, journal des appels).
+`lib/ai` (client OpenAI serveur, contexte dynamique, journal des appels).

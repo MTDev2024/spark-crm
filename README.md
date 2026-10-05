@@ -29,6 +29,8 @@ npm run dev        # http://localhost:3000
 
 Phases 0 à 2 : socle technique, shell et navigation, gestion des prospects (création, modification, suppression, recherche), fiche prospect (données avec provenance, exploitabilité par canal, historique, actions), page Actions, dashboard alimenté (À faire aujourd'hui, alertes, prospects récents).
 
+Phase 4 : base commerciale (Bibliothèque : méthodes avec étapes et source obligatoire pour être validées, offres, réalisations, arguments, objections, sources, règles), sans contenu préchargé.
+
 Phase 3 : authentification (email + mot de passe, inscriptions fermées) et persistance dans Supabase, avec isolation des données par utilisateur (RLS). Pas encore d'IA. Voir [ROADMAP.md](ROADMAP.md).
 
 ## Configuration

@@ -1,19 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EmptyState } from "@/components/shared/empty-state";
+import { EntitySection } from "@/components/library/entity-section";
 import { PageHeader } from "@/components/shared/page-header";
-import { librarySections } from "@/config/navigation";
+import { getEntityBySlug, libraryEntities } from "@/config/library";
 
 export function generateStaticParams() {
-  return librarySections.map(({ slug }) => ({ section: slug }));
+  return libraryEntities.map(({ slug }) => ({ section: slug }));
 }
 
 export default async function LibrarySectionPage({
   params,
 }: PageProps<"/bibliotheque/[section]">) {
   const { section: slug } = await params;
-  const section = librarySections.find((s) => s.slug === slug);
-  if (!section) notFound();
+  const config = getEntityBySlug(slug);
+  if (!config) notFound();
 
   return (
     <>
@@ -23,11 +23,8 @@ export default async function LibrarySectionPage({
       >
         ← Bibliothèque
       </Link>
-      <PageHeader title={section.label} description={section.description} />
-      <EmptyState
-        title={`Aucun élément dans « ${section.label} »`}
-        description="Cette section sera alimentée lors de la phase base commerciale."
-      />
+      <PageHeader title={config.label} description={config.description} />
+      <EntitySection config={config} />
     </>
   );
 }
