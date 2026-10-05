@@ -1,29 +1,48 @@
 import { useSyncExternalStore } from "react";
 import { toDateString } from "@/lib/domain/actions";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type {
   Action,
   Interaction,
   Prospect,
   StoredDataPoint,
 } from "@/types/domain";
+import {
+  actionFromRow,
+  actionToRow,
+  dataPointFromRow,
+  dataPointToRow,
+  interactionFromRow,
+  interactionToRow,
+  prospectFieldsToRow,
+  prospectFromRow,
+  prospectToRow,
+  type ActionRow,
+  type DataPointRow,
+  type InteractionRow,
+  type ProspectRow,
+} from "./mappers";
 
 /**
- * STORE LOCAL (phase 2)
+ * STORE DES DONNÉES (Supabase)
  *
- * Toutes les données vivent dans le navigateur (localStorage) en attendant
- * Supabase (phase 3). Ce fichier est la SEULE porte d'entrée vers les données :
- * les composants lisent via `useCrm()` et écrivent via les fonctions exportées.
- * Le jour où Supabase arrive, on remplace ce fichier sans toucher aux écrans.
+ * Ce fichier est la SEULE porte d'entrée vers les données : les composants
+ * lisent via `useCrm()` et écrivent via les fonctions exportées ci-dessous.
  *
- * Limite assumée : les données restent dans CE navigateur et disparaissent si
- * l'on vide les données du site.
+ * Fonctionnement :
+ *  - Au premier abonnement, tout est chargé depuis Supabase en mémoire.
+ *  - Chaque modification met d'abord à jour la mémoire (l'écran réagit
+ *    instantanément), puis envoie l'écriture à Supabase en arrière-plan.
+ *  - Les écritures partent l'une après l'autre (file d'attente), pour qu'un
+ *    prospect soit toujours créé avant ses actions.
+ *  - Si une écriture échoue, une erreur est exposée (`error`) et les données
+ *    sont rechargées depuis la base : l'écran retrouve l'état réel.
+ *  - La sécurité (chaque utilisateur ne voit que ses lignes) est assurée par
+ *    la base (RLS), pas par ce code.
  *
- * Fonctionnement : `useSyncExternalStore` (hook React) abonne les composants
- * au store. À chaque modification, on remplace l'objet `cached` par un nouvel
- * objet, ce qui prévient React qu'il doit se re-rendre.
+ * `useSyncExternalStore` (hook React) abonne les composants au store : à chaque
+ * modification on remplace l'objet `cached`, ce qui déclenche leur mise à jour.
  */
-
-const STORAGE_KEY = "spark-crm:v1";
 
 export type CrmState = {
   prospects: Prospect[];
@@ -34,8 +53,10 @@ export type CrmState = {
 
 type Snapshot = {
   state: CrmState;
-  /** false pendant le rendu serveur et le premier rendu client : les données ne sont pas encore lues. */
+  /** false tant que les données n'ont pas été chargées depuis la base. */
   hydrated: boolean;
+  /** Message d'erreur de synchronisation à afficher, ou null. */
+  error: string | null;
 };
 
 const EMPTY_STATE: CrmState = {
@@ -45,65 +66,110 @@ const EMPTY_STATE: CrmState = {
   dataPoints: [],
 };
 
-/** Instantané utilisé côté serveur : le serveur n'a pas accès au localStorage. */
-const SERVER_SNAPSHOT: Snapshot = { state: EMPTY_STATE, hydrated: false };
+const INITIAL_SNAPSHOT: Snapshot = {
+  state: EMPTY_STATE,
+  hydrated: false,
+  error: null,
+};
 
-let cached: Snapshot | null = null;
+let cached: Snapshot = INITIAL_SNAPSHOT;
+let loadStarted = false;
 const listeners = new Set<() => void>();
 
-/** Lit le localStorage. Toute donnée illisible est ignorée plutôt que de faire planter l'app. */
-function loadState(): CrmState {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY_STATE;
-    const parsed = JSON.parse(raw) as Partial<CrmState>;
-    return {
-      prospects: Array.isArray(parsed.prospects) ? parsed.prospects : [],
-      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-      interactions: Array.isArray(parsed.interactions)
-        ? parsed.interactions
-        : [],
-      dataPoints: Array.isArray(parsed.dataPoints) ? parsed.dataPoints : [],
-    };
-  } catch {
-    return EMPTY_STATE;
-  }
+function publish(next: Snapshot): void {
+  cached = next;
+  listeners.forEach((listener) => listener());
 }
 
 function getSnapshot(): Snapshot {
-  if (cached === null) cached = { state: loadState(), hydrated: true };
   return cached;
 }
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  // Un autre onglet a modifié les données : on relit le localStorage.
-  const onStorage = (event: StorageEvent) => {
-    if (event.key !== STORAGE_KEY) return;
-    cached = null;
-    listener();
-  };
-  window.addEventListener("storage", onStorage);
+  // Premier abonné côté navigateur : on lance le chargement des données.
+  if (!loadStarted) {
+    loadStarted = true;
+    void load();
+  }
   return () => {
     listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
   };
 }
 
-/** Enregistre le nouvel état, le persiste et prévient les composants abonnés. */
-function commit(state: CrmState): void {
-  cached = { state, hydrated: true };
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Stockage plein ou bloqué : l'état reste en mémoire pour la session.
-  }
-  listeners.forEach((listener) => listener());
+/** Hook de lecture : { state, hydrated, error }. */
+export function useCrm(): Snapshot {
+  return useSyncExternalStore(subscribe, getSnapshot, () => INITIAL_SNAPSHOT);
 }
 
-/** Hook de lecture : { state, hydrated }. */
-export function useCrm(): Snapshot {
-  return useSyncExternalStore(subscribe, getSnapshot, () => SERVER_SNAPSHOT);
+/** Message affiché à l'utilisateur quand la base est injoignable ou refuse l'écriture. */
+function describeError(error: { message: string } | null | undefined): string {
+  return `Erreur de synchronisation avec la base : ${error?.message ?? "inconnue"}`;
+}
+
+/** Charge les quatre tables en parallèle et remplace l'état en mémoire. */
+async function load(): Promise<void> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const [prospects, actions, interactions, dataPoints] = await Promise.all([
+      supabase.from("prospects").select("*").order("created_at", { ascending: false }),
+      supabase.from("actions").select("*"),
+      supabase.from("interactions").select("*"),
+      supabase.from("data_points").select("*"),
+    ]);
+    const failure = [prospects, actions, interactions, dataPoints].find((r) => r.error);
+    if (failure) {
+      publish({ ...cached, hydrated: true, error: describeError(failure.error) });
+      return;
+    }
+    publish({
+      hydrated: true,
+      error: null,
+      state: {
+        prospects: (prospects.data as ProspectRow[]).map(prospectFromRow),
+        actions: (actions.data as ActionRow[]).map(actionFromRow),
+        interactions: (interactions.data as InteractionRow[]).map(interactionFromRow),
+        dataPoints: (dataPoints.data as DataPointRow[]).map(dataPointFromRow),
+      },
+    });
+  } catch (error) {
+    publish({ ...cached, hydrated: true, error: describeError(error as Error) });
+  }
+}
+
+/* ------------------------- écriture en arrière-plan ------------------------ */
+
+// File d'attente : chaque écriture attend la fin de la précédente.
+let writeQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Met une écriture en file. `write` renvoie l'erreur éventuelle de Supabase.
+ * En cas d'échec : on affiche l'erreur puis on recharge l'état réel de la base.
+ */
+function enqueue(
+  write: () => PromiseLike<{ error: { message: string } | null }>,
+): void {
+  writeQueue = writeQueue.then(async () => {
+    try {
+      const { error } = await write();
+      if (error) throw new Error(error.message);
+    } catch (error) {
+      publish({ ...cached, error: describeError(error as Error) });
+      await load();
+      // load() efface l'erreur si le rechargement réussit : on la remet pour qu'elle reste visible.
+      publish({ ...cached, error: describeError(error as Error) });
+    }
+  });
+}
+
+/** Masque le message d'erreur (bouton « Fermer »). */
+export function dismissError(): void {
+  publish({ ...cached, error: null });
+}
+
+/** Remplace l'état en mémoire (affichage immédiat avant l'écriture en base). */
+function setState(update: (state: CrmState) => CrmState): void {
+  publish({ ...cached, state: update(cached.state) });
 }
 
 function newId(): string {
@@ -115,34 +181,45 @@ function today(): string {
   return toDateString(new Date());
 }
 
+const db = () => getSupabaseBrowserClient();
+
 /* ------------------------------ Prospects ------------------------------ */
 
 export type ProspectInput = Omit<Prospect, "id" | "createdAt">;
 
 export function addProspect(input: ProspectInput): Prospect {
-  const prospect: Prospect = { ...input, id: newId(), createdAt: today() };
-  const { state } = getSnapshot();
-  commit({ ...state, prospects: [prospect, ...state.prospects] });
+  const prospect: Prospect = {
+    ...input,
+    id: newId(),
+    createdAt: new Date().toISOString(),
+  };
+  setState((s) => ({ ...s, prospects: [prospect, ...s.prospects] }));
+  enqueue(() => db().from("prospects").insert(prospectToRow(prospect)));
   return prospect;
 }
 
 export function updateProspect(id: string, input: ProspectInput): void {
-  const { state } = getSnapshot();
-  commit({
-    ...state,
-    prospects: state.prospects.map((p) => (p.id === id ? { ...p, ...input } : p)),
-  });
+  setState((s) => ({
+    ...s,
+    prospects: s.prospects.map((p) => (p.id === id ? { ...p, ...input } : p)),
+  }));
+  enqueue(() =>
+    db().from("prospects").update(prospectFieldsToRow(input)).eq("id", id),
+  );
 }
 
-/** Supprime un prospect ET tout ce qui lui est rattaché (actions, interactions, données). */
+/**
+ * Supprime un prospect. La base supprime en cascade ses actions, interactions
+ * et données ; on fait de même en mémoire.
+ */
 export function deleteProspect(id: string): void {
-  const { state } = getSnapshot();
-  commit({
-    prospects: state.prospects.filter((p) => p.id !== id),
-    actions: state.actions.filter((a) => a.prospectId !== id),
-    interactions: state.interactions.filter((i) => i.prospectId !== id),
-    dataPoints: state.dataPoints.filter((d) => d.prospectId !== id),
-  });
+  setState((s) => ({
+    prospects: s.prospects.filter((p) => p.id !== id),
+    actions: s.actions.filter((a) => a.prospectId !== id),
+    interactions: s.interactions.filter((i) => i.prospectId !== id),
+    dataPoints: s.dataPoints.filter((d) => d.prospectId !== id),
+  }));
+  enqueue(() => db().from("prospects").delete().eq("id", id));
 }
 
 /* ------------------------------- Actions ------------------------------- */
@@ -151,25 +228,31 @@ export type ActionInput = Omit<Action, "id" | "doneAt">;
 
 export function addAction(input: ActionInput): Action {
   const action: Action = { ...input, id: newId(), doneAt: null };
-  const { state } = getSnapshot();
-  commit({ ...state, actions: [...state.actions, action] });
+  setState((s) => ({ ...s, actions: [...s.actions, action] }));
+  enqueue(() => db().from("actions").insert(actionToRow(action)));
   return action;
 }
 
 /** Marque une action terminée, ou la rouvre (done = false). */
 export function setActionDone(id: string, done: boolean): void {
-  const { state } = getSnapshot();
-  commit({
-    ...state,
-    actions: state.actions.map((a) =>
-      a.id === id ? { ...a, doneAt: done ? today() : null } : a,
-    ),
-  });
+  const doneAt = done ? today() : null;
+  setState((s) => ({
+    ...s,
+    actions: s.actions.map((a) => (a.id === id ? { ...a, doneAt } : a)),
+  }));
+  enqueue(() => db().from("actions").update({ done_at: doneAt }).eq("id", id));
 }
 
+/** Supprime une action. Les interactions qui y menaient sont conservées (la base met le lien à vide). */
 export function deleteAction(id: string): void {
-  const { state } = getSnapshot();
-  commit({ ...state, actions: state.actions.filter((a) => a.id !== id) });
+  setState((s) => ({
+    ...s,
+    actions: s.actions.filter((a) => a.id !== id),
+    interactions: s.interactions.map((i) =>
+      i.nextActionId === id ? { ...i, nextActionId: null } : i,
+    ),
+  }));
+  enqueue(() => db().from("actions").delete().eq("id", id));
 }
 
 /* ----------------------------- Interactions ---------------------------- */
@@ -180,16 +263,16 @@ export type InteractionInput = Omit<
 >;
 
 /**
- * Enregistre une interaction ET sa suite en une seule écriture :
+ * Enregistre une interaction ET sa suite :
  * - `nextAction` fourni  → l'action est créée et liée à l'interaction ;
  * - `nextAction` = null  → l'interaction est marquée « aucune prochaine action ».
  * Il est impossible de créer une interaction sans trancher.
+ * En base, l'action est écrite avant l'interaction (l'interaction la référence).
  */
 export function addInteraction(
   input: InteractionInput,
   nextAction: Omit<ActionInput, "prospectId"> | null,
 ): Interaction {
-  const { state } = getSnapshot();
   const action: Action | null = nextAction
     ? { ...nextAction, prospectId: input.prospectId, id: newId(), doneAt: null }
     : null;
@@ -199,11 +282,13 @@ export function addInteraction(
     nextActionId: action?.id ?? null,
     noNextAction: action === null,
   };
-  commit({
-    ...state,
-    interactions: [interaction, ...state.interactions],
-    actions: action ? [...state.actions, action] : state.actions,
-  });
+  setState((s) => ({
+    ...s,
+    interactions: [interaction, ...s.interactions],
+    actions: action ? [...s.actions, action] : s.actions,
+  }));
+  if (action) enqueue(() => db().from("actions").insert(actionToRow(action)));
+  enqueue(() => db().from("interactions").insert(interactionToRow(interaction)));
   return interaction;
 }
 
@@ -218,11 +303,11 @@ export function addDataPoint(input: DataPointInput): void {
     verifiedAt: null,
     confidence: null,
   };
-  const { state } = getSnapshot();
-  commit({ ...state, dataPoints: [...state.dataPoints, dataPoint] });
+  setState((s) => ({ ...s, dataPoints: [...s.dataPoints, dataPoint] }));
+  enqueue(() => db().from("data_points").insert(dataPointToRow(dataPoint)));
 }
 
 export function deleteDataPoint(id: string): void {
-  const { state } = getSnapshot();
-  commit({ ...state, dataPoints: state.dataPoints.filter((d) => d.id !== id) });
+  setState((s) => ({ ...s, dataPoints: s.dataPoints.filter((d) => d.id !== id) }));
+  enqueue(() => db().from("data_points").delete().eq("id", id));
 }

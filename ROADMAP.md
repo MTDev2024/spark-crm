@@ -4,8 +4,8 @@
 | --- | --- | --- |
 | 0 | Initialisation technique | fait |
 | 1 | Shell, navigation, dashboard | fait |
-| 2 | Prospects, fiche, interactions, actions (données locales) | fait (en attente de validation) |
-| 3 | Supabase, authentification, persistance, RLS | à faire |
+| 2 | Prospects, fiche, interactions, actions | fait |
+| 3 | Supabase, authentification, persistance, RLS | fait (en attente de validation) |
 | 4 | Base commerciale (méthodes, offres, réalisations, règles, sources) | à faire |
 | 5 | Qualification IA | à faire |
 | 6 | Préparation d'appel | à faire |

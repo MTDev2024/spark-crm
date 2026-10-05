@@ -38,6 +38,10 @@ Une `Interaction` référence une prochaine action, ou porte `noNextAction = tru
 
 [src/lib/domain/actions.ts](src/lib/domain/actions.ts) : une action à faire est `overdue` (en retard), `today`, `upcoming` ou `no_date`. Tri : échéance la plus proche d'abord, sans échéance en dernier, puis priorité. Un prospect sans aucune action à faire déclenche une alerte sur le dashboard.
 
+## Base de données
+
+Schéma dans `supabase/migrations/` : `prospects`, `actions`, `interactions`, `data_points`. Les règles du domaine sont aussi des contraintes SQL (valeurs autorisées, « confirmé / à vérifier exigent une valeur », une interaction ne peut pas avoir à la fois une action liée et « aucune action »). Supprimer un prospect supprime en cascade ses actions, interactions et données ; supprimer une action conserve les interactions qui y menaient.
+
 ## Données saisies
 
 Un `DataPoint` doit avoir une valeur s'il est « confirmé » ou « à vérifier » ; « manquant », « recherché, introuvable » et « non applicable » n'en ont pas. Une valeur inconnue est affichée « Inconnu », jamais complétée. La source est un texte libre en phase 2 ; elle deviendra un lien vers la table des sources en phase 4.

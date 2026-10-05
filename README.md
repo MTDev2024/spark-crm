@@ -6,7 +6,7 @@ Question centrale : *quelle est la meilleure action commerciale à effectuer mai
 
 ## Stack
 
-Next.js (App Router), TypeScript strict, Tailwind CSS 4, shadcn/ui, Zod, Vitest. Prévu : Supabase (PostgreSQL, Auth, RLS), API OpenAI côté serveur, Vercel.
+Next.js (App Router), TypeScript strict, Tailwind CSS 4, shadcn/ui, Zod, Vitest, Supabase (PostgreSQL, Auth, RLS). Prévu : API OpenAI côté serveur, Vercel.
 
 ## Démarrage
 
@@ -29,7 +29,11 @@ npm run dev        # http://localhost:3000
 
 Phases 0 à 2 : socle technique, shell et navigation, gestion des prospects (création, modification, suppression, recherche), fiche prospect (données avec provenance, exploitabilité par canal, historique, actions), page Actions, dashboard alimenté (À faire aujourd'hui, alertes, prospects récents).
 
-Les données sont enregistrées **dans le navigateur** (localStorage) en attendant Supabase : elles ne sont pas partagées entre appareils et disparaissent si l'on vide les données du site. Pas encore d'IA. Voir [ROADMAP.md](ROADMAP.md).
+Phase 3 : authentification (email + mot de passe, inscriptions fermées) et persistance dans Supabase, avec isolation des données par utilisateur (RLS). Pas encore d'IA. Voir [ROADMAP.md](ROADMAP.md).
+
+## Configuration
+
+Copier `.env.example` en `.env.local` et renseigner l'URL et la clé publishable du projet Supabase. La procédure complète (base, utilisateur, réglages) est dans [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Documentation
 

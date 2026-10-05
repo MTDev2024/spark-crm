@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Zap } from "lucide-react";
 import { BottomNav, SidebarNav } from "./nav-links";
+import { SyncBanner } from "./sync-banner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           Spark CRM
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 pb-24 md:p-8 md:pb-8">
+          <SyncBanner />
           {children}
         </main>
       </div>

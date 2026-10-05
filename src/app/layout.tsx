@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,15 +17,14 @@ export const metadata: Metadata = {
   description: "Copilote IA de prospection commerciale",
 };
 
+/** Layout racine : commun à toutes les pages, y compris /login. Le menu est dans (app)/layout.tsx. */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-background text-foreground">
-        <AppShell>{children}</AppShell>
-      </body>
+      <body className="min-h-full bg-background text-foreground">{children}</body>
     </html>
   );
 }
