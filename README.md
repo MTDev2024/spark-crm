@@ -27,11 +27,13 @@ npm run dev        # http://localhost:3000
 
 ## État actuel
 
-Phase 0 et 1 : socle technique, shell applicatif, navigation, dashboard (blocs vides, sans donnée fictive), pages principales, types de domaine. Pas encore de persistance ni d'IA. Voir [ROADMAP.md](ROADMAP.md).
+Phases 0 à 2 : socle technique, shell et navigation, gestion des prospects (création, modification, suppression, recherche), fiche prospect (données avec provenance, exploitabilité par canal, historique, actions), page Actions, dashboard alimenté (À faire aujourd'hui, alertes, prospects récents).
+
+Les données sont enregistrées **dans le navigateur** (localStorage) en attendant Supabase : elles ne sont pas partagées entre appareils et disparaissent si l'on vide les données du site. Pas encore d'IA. Voir [ROADMAP.md](ROADMAP.md).
 
 ## Documentation
 
-[PRODUCT.md](PRODUCT.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DOMAIN.md](DOMAIN.md) · [AI.md](AI.md) · [KNOWLEDGE.md](KNOWLEDGE.md) · [ROADMAP.md](ROADMAP.md)
+[DEVELOPMENT.md](DEVELOPMENT.md) (par où commencer) · [PRODUCT.md](PRODUCT.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [DOMAIN.md](DOMAIN.md) · [AI.md](AI.md) · [KNOWLEDGE.md](KNOWLEDGE.md) · [ROADMAP.md](ROADMAP.md)
 
 ## Sécurité
 

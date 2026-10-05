@@ -2,8 +2,19 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { DashboardBlock } from "@/components/dashboard/dashboard-block";
+import {
+  AlertsBlock,
+  RecentProspectsBlock,
+  TodayBlock,
+} from "@/components/dashboard/live-blocks";
 import { PageHeader } from "@/components/shared/page-header";
 
+/**
+ * Dashboard. Trois blocs sont déjà alimentés par les vraies données
+ * (À faire aujourd'hui, Alertes, Prospects récents). Les autres sont des
+ * emplacements vides, branchés dans les phases suivantes (qualification,
+ * relances, analytics).
+ */
 export default function DashboardPage() {
   return (
     <>
@@ -11,30 +22,21 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Quelle est la meilleure action commerciale à effectuer maintenant ?"
         actions={
-          <Link href="/prospects" className={buttonVariants()}>
+          <Link href="/prospects/nouveau" className={buttonVariants()}>
             <Plus className="size-4" aria-hidden />
             Nouveau prospect
           </Link>
         }
       />
       <div className="grid gap-4 lg:grid-cols-3">
-        <DashboardBlock
-          className="lg:col-span-2"
-          title="À faire aujourd'hui"
-          emptyTitle="Aucune action prévue"
-          emptyDescription="Les actions en retard, du jour, relances, appels et visites apparaîtront ici."
-        />
-        <DashboardBlock
-          title="Alertes commerciales"
-          emptyTitle="Aucune alerte"
-          emptyDescription="Prospects sans prochaine action, relances en retard…"
-        />
+        <TodayBlock className="lg:col-span-2" />
+        <AlertsBlock />
         <DashboardBlock
           title="Prospects à qualifier"
-          emptyTitle="Aucun prospect à qualifier"
+          emptyTitle="Disponible avec la qualification"
         />
-        <DashboardBlock title="Relances" emptyTitle="Aucune relance en attente" />
-        <DashboardBlock title="Prospects récents" emptyTitle="Aucun prospect" />
+        <DashboardBlock title="Relances" emptyTitle="Disponible avec les relances" />
+        <RecentProspectsBlock />
         <DashboardBlock
           title="Activité"
           emptyTitle="Pas encore d'activité"

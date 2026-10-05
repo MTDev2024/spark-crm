@@ -13,15 +13,29 @@ export type Channel = "phone" | "visit" | "email" | "message" | "meeting";
 
 export type ProspectContactField = "phone" | "email" | "address";
 
+/**
+ * Une information sur un prospect, avec sa provenance.
+ * `key` est un libellé libre (ex. « Logiciel de réservation ») : il n'y a pas
+ * de liste figée de champs, ce qui permet de décrire n'importe quel écosystème.
+ */
 export type DataPoint = {
   key: string;
+  /** null tant que la donnée est inconnue (statut missing / searched_not_found). */
   value: string | null;
   kind: InfoKind;
   status: DataStatus;
-  sourceId: string | null;
+  /** Provenance en texte libre ; sera remplacée par un lien vers la table des sources (phase 4). */
+  source: string | null;
+  /** Date de collecte, format YYYY-MM-DD. */
   collectedAt: string | null;
   verifiedAt: string | null;
   confidence: number | null;
+};
+
+/** DataPoint tel qu'il est rangé dans le store : rattaché à un prospect. */
+export type StoredDataPoint = DataPoint & {
+  id: string;
+  prospectId: string;
 };
 
 export type Prospect = {
@@ -62,8 +76,10 @@ export type Action = {
   type: ActionType;
   objective: string;
   reason: string | null;
+  /** Échéance au format YYYY-MM-DD (jour local) ; null = sans échéance. */
   dueAt: string | null;
   priority: ActionPriority;
+  /** Renseigné quand l'action est terminée ; null tant qu'elle est à faire. */
   doneAt: string | null;
 };
 

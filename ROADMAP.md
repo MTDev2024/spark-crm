@@ -3,8 +3,8 @@
 | Phase | Contenu | État |
 | --- | --- | --- |
 | 0 | Initialisation technique | fait |
-| 1 | Shell, navigation, dashboard | fait (en attente de validation) |
-| 2 | Prospects, fiche, interactions, actions | à faire |
+| 1 | Shell, navigation, dashboard | fait |
+| 2 | Prospects, fiche, interactions, actions (données locales) | fait (en attente de validation) |
 | 3 | Supabase, authentification, persistance, RLS | à faire |
 | 4 | Base commerciale (méthodes, offres, réalisations, règles, sources) | à faire |
 | 5 | Qualification IA | à faire |
